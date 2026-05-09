@@ -1,37 +1,37 @@
 // api/roblox.js — Vercel Serverless Function
-// Source code is never exposed publicly; only the endpoint URL is.
+// Runs server-side only. Source is never exposed to the public.
 
-export default async function handler(req, res) {
-  // Only allow GET
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+module.exports = async function handler(req, res) {
+  // CORS headers (allows your frontend to call this)
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
 
-  const { username } = req.query;
-  if (!username || typeof username !== 'string' || username.trim().length === 0) {
-    return res.status(400).json({ error: 'username required' });
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const username = (req.query.username || '').trim();
+  if (!username) return res.status(400).json({ error: 'username required' });
 
   try {
-    // Step 1: Search for user by username
+    // Step 1: Search Roblox for the username
     const searchRes = await fetch(
-      `https://users.roblox.com/v1/users/search?keyword=${encodeURIComponent(username.trim())}&limit=10`
+      `https://users.roblox.com/v1/users/search?keyword=${encodeURIComponent(username)}&limit=10`
     );
-    if (!searchRes.ok) throw new Error(`roblox_search_${searchRes.status}`);
+    if (!searchRes.ok) throw new Error(`search_${searchRes.status}`);
     const searchData = await searchRes.json();
 
-    // Find exact username match (case-insensitive)
-    const match = searchData.data?.find(
-      u => u.name.toLowerCase() === username.trim().toLowerCase()
+    // Exact match only (case-insensitive)
+    const match = (searchData.data || []).find(
+      u => u.name.toLowerCase() === username.toLowerCase()
     );
 
     if (!match) {
       return res.status(200).json({ found: false });
     }
 
-    // Step 2: Fetch full profile (includes bio)
+    // Step 2: Fetch full profile to get bio
     const profileRes = await fetch(`https://users.roblox.com/v1/users/${match.id}`);
-    if (!profileRes.ok) throw new Error(`roblox_profile_${profileRes.status}`);
+    if (!profileRes.ok) throw new Error(`profile_${profileRes.status}`);
     const profile = await profileRes.json();
 
     return res.status(200).json({
@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     });
 
   } catch (err) {
-    console.error('[roblox proxy]', err.message);
+    console.error('[BetWing/roblox]', err.message);
     return res.status(502).json({ error: 'Failed to reach Roblox API' });
   }
-}
+};
